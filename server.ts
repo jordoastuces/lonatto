@@ -48,6 +48,12 @@ async function startServer() {
   app.use(express.json());
   const PORT = 3000;
 
+  // Logging middleware at the very top to see ALL requests
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    next();
+  });
+
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", env: process.env.NODE_ENV });
@@ -55,14 +61,6 @@ async function startServer() {
 
   app.get("/api/vapid-public-key", (req, res) => {
     res.json({ publicKey: vapidKeys.publicKey });
-  });
-
-  // Logging middleware for production debugging
-  app.use((req, res, next) => {
-    if (process.env.NODE_ENV === "production") {
-      console.log(`${req.method} ${req.path}`);
-    }
-    next();
   });
 
   app.post("/api/subscribe", (req, res) => {
@@ -127,26 +125,19 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, "dist");
+    const distPath = path.join(process.cwd(), "dist");
     console.log("Production mode: serving static files from", distPath);
     
-    if (!fs.existsSync(distPath)) {
-      console.error("ERROR: 'dist' directory not found! Did you run 'npm run build'?");
-    }
-
+    // Serve static files from dist
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      // If the request looks like an asset (has an extension), don't serve index.html
-      if (req.path.includes('.') && !req.path.endsWith('.html')) {
-        return res.status(404).send("Asset not found");
-      }
 
+    // SPA fallback: serve index.html for any other route
+    app.get("*", (req, res) => {
       const indexPath = path.join(distPath, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
-        console.error("ERROR: index.html not found at", indexPath);
-        res.status(404).send("Application not built correctly. Please check build logs and ensure 'npm run build' was executed.");
+        res.status(404).send(`Build artifacts not found at ${indexPath}. Ensure 'npm run build' completed successfully.`);
       }
     });
   }
