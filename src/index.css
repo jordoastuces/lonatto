@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-brand-red: #e30613;
+  --color-brand-green: #27ae60;
+  --color-brand-blue: #1e40af;
+  --color-brand-gold: #ffce00;
+  --color-bg-main: #f8fafc;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  }
+}
+
+.glass-card {
+  @apply bg-white/90 backdrop-blur-md border border-slate-200/50 shadow-sm;
+}
+
+.lottery-ball {
+  @apply w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-[inset_0_-2px_4px_rgba(0,0,0,0.1)] transition-all duration-300 hover:scale-110 hover:shadow-lg;
+}
+
+.section-header {
+  @apply text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
