@@ -49,8 +49,20 @@ async function startServer() {
   const PORT = 3000;
 
   // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
+
   app.get("/api/vapid-public-key", (req, res) => {
     res.json({ publicKey: vapidKeys.publicKey });
+  });
+
+  // Logging middleware for production debugging
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV === "production") {
+      console.log(`${req.method} ${req.path}`);
+    }
+    next();
   });
 
   app.post("/api/subscribe", (req, res) => {
