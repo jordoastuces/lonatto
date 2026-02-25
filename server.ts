@@ -9,7 +9,13 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("notifications.db");
+const PERSISTENT_DIR = process.env.PERSISTENT_DIR || ".";
+if (PERSISTENT_DIR !== "." && !fs.existsSync(PERSISTENT_DIR)) {
+  fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
+}
+
+const dbPath = path.join(PERSISTENT_DIR, "notifications.db");
+const db = new Database(dbPath);
 db.exec(`
   CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,7 +27,7 @@ db.exec(`
 `);
 
 // VAPID keys should be generated once and persisted
-const VAPID_FILE = "vapid-keys.json";
+const VAPID_FILE = path.join(PERSISTENT_DIR, "vapid-keys.json");
 let vapidKeys: { publicKey: string; privateKey: string };
 
 if (fs.existsSync(VAPID_FILE)) {
@@ -109,9 +115,27 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    const distPath = path.join(__dirname, "dist");
+    console.log("Production mode: serving static files from", distPath);
+    
+    if (!fs.existsSync(distPath)) {
+      console.error("ERROR: 'dist' directory not found! Did you run 'npm run build'?");
+    }
+
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      // If the request looks like an asset (has an extension), don't serve index.html
+      if (req.path.includes('.') && !req.path.endsWith('.html')) {
+        return res.status(404).send("Asset not found");
+      }
+
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        console.error("ERROR: index.html not found at", indexPath);
+        res.status(404).send("Application not built correctly. Please check build logs and ensure 'npm run build' was executed.");
+      }
     });
   }
 
