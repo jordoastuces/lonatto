@@ -135,9 +135,13 @@ async function startServer() {
     app.get("*", (req, res) => {
       const indexPath = path.join(distPath, "index.html");
       if (fs.existsSync(indexPath)) {
+        // Disable caching for index.html to ensure users always get the latest version
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         res.sendFile(indexPath);
       } else {
-        res.status(404).send(`Build artifacts not found at ${indexPath}. Ensure 'npm run build' completed successfully.`);
+        res.status(404).send(`Build artifacts not found. Please check Render build logs.`);
       }
     });
   }
