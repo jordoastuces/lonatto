@@ -64,9 +64,11 @@ async function startServer() {
   });
 
   app.get("/api/config", (req, res) => {
+    const key = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
     res.json({ 
-      hasApiKey: !!process.env.VITE_GEMINI_API_KEY,
-      apiKey: process.env.VITE_GEMINI_API_KEY || "" 
+      hasApiKey: !!key,
+      apiKey: key,
+      source: process.env.VITE_GEMINI_API_KEY ? "VITE_PREFIX" : (process.env.GEMINI_API_KEY ? "DIRECT" : "NONE")
     });
   });
 

@@ -108,7 +108,7 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
 export async function chatWithGemini(message: string, history: { role: "user" | "model", parts: { text: string }[] }[]) {
   const aiInstance = await getAI();
   if (!aiInstance) {
-    return { text: "Le service d'IA est actuellement indisponible car la clé API n'est pas configurée. Veuillez ajouter VITE_GEMINI_API_KEY dans vos variables d'environnement." };
+    return { text: "⚠️ **Configuration Requise** : L'IA ne trouve pas votre clé API. \n\n**Comment réparer :**\n1. Allez sur Render > Environment\n2. Vérifiez que vous avez une variable nommée `VITE_GEMINI_API_KEY` avec votre clé.\n3. Assurez-vous d'avoir cliqué sur **Save Changes**." };
   }
   const model = "gemini-3.1-pro-preview";
   
