@@ -281,6 +281,71 @@ export default function App() {
     }
   };
 
+  const [showLanding, setShowLanding] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
+
+  if (showLanding) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col max-w-2xl mx-auto shadow-2xl border-x border-slate-100">
+        <main className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-10">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative"
+          >
+            <div className="absolute -inset-4 bg-gradient-to-r from-brand-red via-brand-green to-brand-blue rounded-full blur-2xl opacity-20 animate-pulse"></div>
+            <div className="relative bg-white p-6 rounded-[3rem] shadow-2xl border border-slate-50">
+              <Trophy className="w-20 h-20 text-brand-gold" />
+            </div>
+          </motion.div>
+
+          <div className="space-y-4">
+            <h1 className="font-serif italic text-5xl tracking-tighter text-slate-900">Lonato World <span className="text-brand-blue">Pro</span></h1>
+            <p className="text-slate-500 text-lg max-w-xs mx-auto leading-relaxed">
+              L'outil d'analyse de loterie le plus puissant d'Afrique de l'Ouest, propulsé par l'Intelligence Artificielle.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 w-full">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left space-y-2">
+              <div className="w-8 h-8 bg-brand-blue/10 rounded-xl flex items-center justify-center">
+                <Globe className="w-4 h-4 text-brand-blue" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900">Multi-Pays</h3>
+              <p className="text-[10px] text-slate-400 leading-tight">Accès aux tirages du Togo, Bénin, Ghana et plus.</p>
+            </div>
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left space-y-2">
+              <div className="w-8 h-8 bg-brand-green/10 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-brand-green" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900">IA Prédictive</h3>
+              <p className="text-[10px] text-slate-400 leading-tight">Algorithmes avancés basés sur Gemini 3.1.</p>
+            </div>
+          </div>
+
+          <div className="w-full space-y-4">
+            <button 
+              onClick={() => setShowLanding(false)}
+              className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:scale-[1.02] transition-transform"
+            >
+              Accéder à la Plateforme
+            </button>
+            <p className="text-[10px] text-slate-400 font-medium">
+              En continuant, vous acceptez nos <span className="underline">Conditions d'Utilisation</span>.
+            </p>
+          </div>
+        </main>
+        
+        <footer className="p-8 border-t border-slate-50 flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-red-100 text-red-600 text-[8px] font-black rounded uppercase">18+</span>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Jouer comporte des risques</p>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-2xl mx-auto relative overflow-hidden shadow-2xl border-x border-slate-200">
       {/* Header */}
@@ -323,9 +388,10 @@ export default function App() {
               )}
             </button>
             <button 
-              onClick={() => loadResults(selectedCountry, true, startDate, endDate)}
+              onClick={() => loadResults(selectedCountry, true, startDate, endDate, selectedGame)}
               className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 disabled:opacity-50"
               disabled={loading}
+              title="Actualiser les données"
             >
               <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
             </button>
@@ -335,6 +401,25 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-8 space-y-10 pb-24">
+        {isFromCache && (
+          <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <History className="w-5 h-5 text-amber-500" />
+              <p className="text-xs text-amber-700 font-medium">
+                Données enregistrées. Actualisez pour voir 2026.
+              </p>
+            </div>
+            <button 
+              onClick={() => {
+                localStorage.clear();
+                loadResults(selectedCountry, true, startDate, endDate, selectedGame);
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:underline"
+            >
+              Vider le cache
+            </button>
+          </div>
+        )}
         {/* Hero / Country Selector */}
         <section className="space-y-6">
           <div className="relative">
@@ -748,6 +833,31 @@ export default function App() {
             </button>
           </div>
         </section>
+
+        {/* Footer Commercial */}
+        <footer className="pt-10 pb-20 border-t border-slate-200 space-y-8">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-brand-gold" />
+              <span className="font-serif italic text-xl">Lonato World Pro</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium max-w-xs">
+              Plateforme indépendante d'analyse de données. Les résultats officiels sont ceux fournis par les organismes nationaux (LONATO, LNB, etc.).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <button className="text-[9px] font-bold uppercase tracking-widest text-slate-500 hover:text-brand-blue">Aide</button>
+            <button className="text-[9px] font-bold uppercase tracking-widest text-slate-500 hover:text-brand-blue">Confidentialité</button>
+            <button className="text-[9px] font-bold uppercase tracking-widest text-slate-500 hover:text-brand-blue">Contact</button>
+          </div>
+
+          <div className="flex justify-center items-center gap-4 pt-4">
+            <div className="px-2 py-1 bg-slate-100 rounded text-[8px] font-black text-slate-400 uppercase tracking-widest">v2.4.0-PRO</div>
+            <div className="w-1 h-1 bg-slate-200 rounded-full" />
+            <div className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">© 2026 Lonato World</div>
+          </div>
+        </footer>
       </main>
 
       {/* Floating Action Button for Chat */}
