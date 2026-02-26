@@ -48,6 +48,8 @@ const COUNTRIES = [
 export default function App() {
   const [results, setResults] = useState<LotteryResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState<{ online: boolean, message: string } | null>(null);
   const [isFromCache, setIsFromCache] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState('Togo');
   const [selectedGame, setSelectedGame] = useState<string>('All');
@@ -112,6 +114,17 @@ export default function App() {
   };
 
   useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        setApiStatus(data);
+      } catch (e) {
+        setApiStatus({ online: false, message: "Serveur injoignable" });
+      }
+    };
+    checkStatus();
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration().then(reg => {
         reg?.pushManager.getSubscription().then(sub => {
@@ -121,10 +134,10 @@ export default function App() {
     }
   }, []);
 
-  const loadResults = async (country: string, forceRefresh = false, start?: string, end?: string) => {
+  const loadResults = async (country: string, forceRefresh = false, start?: string, end?: string, game?: string) => {
     const isCustomRange = start && end;
     const cacheKey = isCustomRange 
-      ? `lottery_${country}_${start}_${end}`
+      ? `lottery_${country}_${start}_${end}_${game || 'all'}`
       : `lottery_${country}_latest`;
     
     if (!forceRefresh) {
@@ -143,16 +156,20 @@ export default function App() {
     }
 
     setLoading(true);
+    setError(null);
     setIsFromCache(false);
     try {
-      const data = await fetchLotteryResults(country, start, end);
+      const data = await fetchLotteryResults(country, start, end, game);
       setResults(data);
       setLastUpdated(new Date().toLocaleTimeString());
       if (data && data.length > 0) {
         localStorage.setItem(cacheKey, JSON.stringify(data));
+      } else if (!isCustomRange) {
+        setError("Aucun résultat récent trouvé pour ce pays.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setError(error.message || "Une erreur est survenue lors de la récupération.");
     } finally {
       setLoading(false);
     }
@@ -232,8 +249,8 @@ export default function App() {
   }, [results]);
 
   useEffect(() => {
-    loadResults(selectedCountry, false, startDate, endDate);
-  }, [selectedCountry, startDate, endDate]);
+    loadResults(selectedCountry, false, startDate, endDate, selectedGame);
+  }, [selectedCountry, startDate, endDate, selectedGame]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -276,8 +293,10 @@ export default function App() {
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-red-600">Live</span>
+                <span className={cn("w-2 h-2 rounded-full animate-pulse", apiStatus?.online ? "bg-emerald-500" : "bg-red-500")} />
+                <span className={cn("text-[10px] font-black uppercase tracking-[0.3em]", apiStatus?.online ? "text-emerald-600" : "text-red-600")}>
+                  {apiStatus?.online ? "Serveur OK" : "API Error"}
+                </span>
               </div>
               <h1 className="font-serif italic text-3xl tracking-tighter text-slate-900 leading-none">Lonato World</h1>
             </div>
@@ -368,18 +387,29 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {(startDate || endDate) && (
+            
+            <div className="mt-6 flex items-center justify-between">
+              {(startDate || endDate) ? (
+                <button 
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                  className="text-[10px] text-brand-red font-bold uppercase tracking-widest hover:text-red-700 flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Réinitialiser
+                </button>
+              ) : <div />}
+              
               <button 
-                onClick={() => {
-                  setStartDate('');
-                  setEndDate('');
-                }}
-                className="mt-4 text-[10px] text-brand-red font-bold uppercase tracking-widest hover:text-red-700 flex items-center gap-1"
+                onClick={() => loadResults(selectedCountry, true, startDate, endDate, selectedGame)}
+                className="px-6 py-3 bg-brand-blue text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2"
               >
-                <X className="w-3 h-3" />
-                Réinitialiser les paramètres
+                <Search className="w-3 h-3" />
+                Rechercher l'historique
               </button>
-            )}
+            </div>
           </div>
         </section>
 
@@ -418,7 +448,7 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <div className="section-header mb-0">
                   <Trophy className="w-3 h-3" />
-                  Flux de Résultats
+                  {startDate || endDate ? 'Archives Historiques' : 'Flux de Résultats'}
                 </div>
                 {isFromCache && (
                   <span className="text-[8px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest border border-slate-200">
@@ -467,6 +497,22 @@ export default function App() {
                   <p className="text-sm text-slate-900 font-bold uppercase tracking-widest">Synchronisation...</p>
                   <p className="text-xs text-slate-400">Extraction des données Lonato en cours</p>
                 </div>
+              </div>
+            ) : error ? (
+              <div className="bg-white rounded-[2.5rem] p-12 border-2 border-dashed border-red-100 text-center space-y-4">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                  <BellOff className="w-6 h-6 text-red-300" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-red-900 font-bold uppercase tracking-widest">Erreur API</p>
+                  <p className="text-xs text-red-400">{error}</p>
+                </div>
+                <button 
+                  onClick={() => loadResults(selectedCountry, true, startDate, endDate, selectedGame)}
+                  className="px-6 py-2.5 bg-brand-red text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-700 transition-all"
+                >
+                  Réessayer la connexion
+                </button>
               </div>
             ) : filteredResults.length > 0 ? (
               <div className="grid gap-6">
@@ -563,7 +609,7 @@ export default function App() {
                   <p className="text-xs text-slate-400">Les archives pour ce pays sont actuellement vides.</p>
                 </div>
                 <button 
-                  onClick={() => loadResults(selectedCountry)}
+                  onClick={() => loadResults(selectedCountry, true, startDate, endDate, selectedGame)}
                   className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all"
                 >
                   Forcer la recherche

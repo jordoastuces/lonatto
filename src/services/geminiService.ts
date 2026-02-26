@@ -8,12 +8,12 @@ export interface LotteryResult {
   sourceUrl?: string;
 }
 
-export async function fetchLotteryResults(country: string = "Togo", startDate?: string, endDate?: string): Promise<LotteryResult[]> {
+export async function fetchLotteryResults(country: string = "Togo", startDate?: string, endDate?: string, gameName?: string): Promise<LotteryResult[]> {
   try {
     const response = await fetch('/api/lottery', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ country, startDate, endDate })
+      body: JSON.stringify({ country, startDate, endDate, gameName })
     });
 
     if (!response.ok) {

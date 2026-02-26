@@ -83,7 +83,7 @@ async function startServer() {
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey: key });
       const model = ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: history.map((h: any) => ({
           role: h.role === "user" ? "user" : "model",
           parts: [{ text: h.parts[0].text }]
@@ -100,7 +100,7 @@ async function startServer() {
 
   app.post("/api/lottery", async (req, res) => {
     try {
-      const { country, startDate, endDate } = req.body;
+      const { country, startDate, endDate, gameName } = req.body;
       const key = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
       if (!key) {
@@ -114,17 +114,25 @@ async function startServer() {
         ? `entre le ${startDate} et le ${endDate}` 
         : "les plus récents (derniers tirages)";
 
-      const prompt = `RECHERCHE ET EXTRACTION DES RÉSULTATS OFFICIELS (ANNÉE 2026) :
-      Trouve les résultats réels, officiels et vérifiables de TOUS les tirages de loterie pour le pays : ${country || "Togo"}.
-      Période demandée : ${dateRangeContext}. 
-      IMPORTANT : Nous sommes actuellement en FÉVRIER 2026. Je veux absolument les résultats les plus récents de l'année 2026.
+      const gameContext = gameName && gameName !== 'All' 
+        ? `spécifiquement pour le jeu "${gameName}"` 
+        : "pour tous les jeux disponibles (Lotto Sam, Diamond, Benz, Kadoo, Akwaaba, etc.)";
+
+      const prompt = `RECHERCHE D'ARCHIVES ET HISTORIQUE DE LOTERIE :
+      Pays : ${country || "Togo"}.
+      Période : ${dateRangeContext}.
+      Jeu : ${gameContext}.
       
-      JEUX REQUIS : Lotto Sam, Diamond, Benz, Kadoo, Akwaaba, etc.
+      Ta mission est de retrouver les résultats OFFICIELS et RÉELS dans l'historique de cette période. 
+      Si la période est passée (ex: 2024, 2025), cherche dans les archives web.
+      Si la période est actuelle (2026), cherche les derniers tirages.
+      
+      IMPORTANT : Ne génère que des données véridiques. Inclus l'URL source pour chaque tirage.
       
       Format : JSON ARRAY d'objets avec country, gameName, date, winningNumbers, sourceUrl.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           systemInstruction: "Tu es un extracteur de données de loterie. Ne génère que du JSON valide. Cite tes sources (URL).",
@@ -146,11 +154,26 @@ async function startServer() {
         }
       });
 
-      res.json(JSON.parse(response.text));
+      try {
+        const results = JSON.parse(response.text);
+        res.json(results);
+      } catch (parseError) {
+        console.error("JSON Parse Error. Raw response:", response.text);
+        throw new Error("Le format des données reçues de l'IA est invalide.");
+      }
     } catch (error: any) {
       console.error("Lottery API Error:", error);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.get("/api/status", (req, res) => {
+    const key = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    res.json({ 
+      online: !!key,
+      message: key ? "Serveur prêt (Clé API détectée)" : "Erreur : Clé API manquante sur Render",
+      timestamp: new Date().toISOString()
+    });
   });
 
   app.get("/api/vapid-public-key", (req, res) => {
