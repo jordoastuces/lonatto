@@ -22,7 +22,8 @@ import {
   Hash,
   Layers,
   Bell,
-  BellOff
+  BellOff,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchLotteryResults, chatWithGemini, LotteryResult } from './services/geminiService';
@@ -64,6 +65,8 @@ export default function App() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPopup, setShowInstallPopup] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   function urlBase64ToUint8Array(base64String: string) {
@@ -156,7 +159,39 @@ export default function App() {
         });
       });
     }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      // Check if user has already dismissed it in this session
+      const isDismissed = sessionStorage.getItem('install_popup_dismissed');
+      if (!isDismissed) {
+        setShowInstallPopup(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    
+    setDeferredPrompt(null);
+    setShowInstallPopup(false);
+  };
+
+  const dismissInstallPopup = () => {
+    setShowInstallPopup(false);
+    sessionStorage.setItem('install_popup_dismissed', 'true');
+  };
 
   const loadResults = async (country: string, forceRefresh = false, start?: string, end?: string, game?: string) => {
     // If no dates provided, default to last 14 days to ensure we see "all daily results"
@@ -374,7 +409,7 @@ export default function App() {
                 className="w-32 h-32 object-contain"
                 onError={(e) => {
                   // Fallback if image is missing
-                  e.currentTarget.src = "https://picsum.photos/seed/lonato/200/200";
+                  e.currentTarget.src = "https://www.lonato.tg/wp-content/uploads/2021/06/logo-lonato.png";
                 }}
               />
             </div>
@@ -1080,6 +1115,50 @@ export default function App() {
                 <Send className="w-6 h-6" />
               </button>
             </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PWA Install Popup */}
+      <AnimatePresence>
+        {showInstallPopup && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed bottom-24 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-white rounded-[2.5rem] p-8 shadow-2xl z-50 border border-slate-100"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center shrink-0 shadow-xl shadow-slate-200">
+                <Download className="w-7 h-7 text-brand-gold" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h4 className="text-slate-900 font-serif italic text-xl">Installer Lonato Pro</h4>
+                <p className="text-slate-500 text-xs leading-relaxed">
+                  Ajoutez l'application sur votre écran d'accueil pour un accès rapide et une expérience hors ligne complète.
+                </p>
+              </div>
+              <button 
+                onClick={dismissInstallPopup}
+                className="p-1 text-slate-300 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button 
+                onClick={dismissInstallPopup}
+                className="flex-1 px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all"
+              >
+                Plus tard
+              </button>
+              <button 
+                onClick={handleInstallClick}
+                className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+              >
+                Installer maintenant
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
