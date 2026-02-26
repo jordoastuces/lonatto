@@ -136,9 +136,10 @@ export default function App() {
 
   const loadResults = async (country: string, forceRefresh = false, start?: string, end?: string, game?: string) => {
     const isCustomRange = start && end;
+    const CACHE_VERSION = 'v2026_v1';
     const cacheKey = isCustomRange 
-      ? `lottery_${country}_${start}_${end}_${game || 'all'}`
-      : `lottery_${country}_latest`;
+      ? `lottery_${CACHE_VERSION}_${country}_${start}_${end}_${game || 'all'}`
+      : `lottery_${CACHE_VERSION}_${country}_latest`;
     
     if (!forceRefresh) {
       const cachedData = localStorage.getItem(cacheKey);
