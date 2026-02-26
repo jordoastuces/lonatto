@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: (import.meta as any).env?.VITE_GEMINI_API_KEY || "" });
+const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export interface LotteryResult {
   country: string;
@@ -40,6 +41,10 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
   5. Format : Nom exact du jeu, date (JJ/MM/AAAA), numéros gagnants, URL source.`;
 
   try {
+    if (!ai) {
+      console.warn("Gemini API key is missing. Skipping fetch.");
+      return [];
+    }
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
@@ -85,6 +90,9 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
 }
 
 export async function chatWithGemini(message: string, history: { role: "user" | "model", parts: { text: string }[] }[]) {
+  if (!ai) {
+    return { text: "Le service d'IA est actuellement indisponible car la clé API n'est pas configurée. Veuillez ajouter VITE_GEMINI_API_KEY dans vos variables d'environnement." };
+  }
   const model = "gemini-3.1-pro-preview";
   
   const chat = ai.chats.create({
