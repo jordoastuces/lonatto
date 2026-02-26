@@ -11,34 +11,7 @@
     <link rel="apple-touch-icon" href="https://picsum.photos/180/180" />
   </head>
   <body>
-    <noscript>
-      <div style="padding: 20px; text-align: center; font-family: sans-serif;">
-        <h1>JavaScript est désactivé ou a échoué</h1>
-        <p>Cette application nécessite JavaScript pour fonctionner. Si vous voyez ce message, c'est que le code de l'application n'a pas pu se lancer.</p>
-      </div>
-    </noscript>
     <div id="root"></div>
-    <script>
-      // Diagnostic pour page blanche
-      window.addEventListener('error', function(e) {
-        if (e.target.tagName === 'SCRIPT') {
-          const diag = document.createElement('div');
-          diag.style.cssText = 'position:fixed;top:20px;left:20px;right:20px;padding:20px;background:#fee2e2;color:#991b1b;border:1px solid #f87171;border-radius:12px;z-index:10000;font-family:sans-serif;font-size:12px;';
-          diag.innerHTML = '<b>Erreur de chargement :</b> Impossible de charger le fichier <br>' + e.target.src + '<br><br><i>Astuce : Videz le cache de votre navigateur.</i>';
-          document.body.appendChild(diag);
-        }
-      }, true);
-
-      setTimeout(() => {
-        const root = document.getElementById('root');
-        if (root && root.innerHTML === '' || root.innerHTML.includes('noscript')) {
-          const diag = document.createElement('div');
-          diag.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:40px;text-align:center;font-family:sans-serif;background:white;border:1px solid #eee;border-radius:20px;box-shadow:0 20px-40px rgba(0,0,0,0.1);z-index:9999;width:80%;max-width:400px;';
-          diag.innerHTML = '<h2>Chargement interrompu</h2><p style="color:#666;font-size:14px;">L\'application n\'a pas pu démarrer. Cela arrive souvent à cause d\'une erreur de script ou d\'un fichier manquant.</p><button onclick="location.reload()" style="padding:12px 24px;background:#1e40af;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:bold;">Réessayer</button>';
-          document.body.appendChild(diag);
-        }
-      }, 6000);
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

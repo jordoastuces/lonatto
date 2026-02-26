@@ -56,7 +56,18 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", env: process.env.NODE_ENV });
+    res.json({ 
+      status: "ok", 
+      env: process.env.NODE_ENV,
+      hasApiKey: !!process.env.VITE_GEMINI_API_KEY 
+    });
+  });
+
+  app.get("/api/config", (req, res) => {
+    res.json({ 
+      hasApiKey: !!process.env.VITE_GEMINI_API_KEY,
+      apiKey: process.env.VITE_GEMINI_API_KEY || "" 
+    });
   });
 
   app.get("/api/vapid-public-key", (req, res) => {

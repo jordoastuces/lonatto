@@ -1,7 +1,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+let ai: GoogleGenAI | null = null;
+
+async function getAI() {
+  if (ai) return ai;
+  
+  try {
+    const response = await fetch('/api/config');
+    const { apiKey } = await response.json();
+    if (apiKey) {
+      ai = new GoogleGenAI({ apiKey });
+      return ai;
+    }
+  } catch (e) {
+    console.error("Failed to fetch API key from server", e);
+  }
+  return null;
+}
 
 export interface LotteryResult {
   country: string;
@@ -14,6 +29,7 @@ export interface LotteryResult {
 }
 
 export async function fetchLotteryResults(country: string = "Togo", startDate?: string, endDate?: string): Promise<LotteryResult[]> {
+  const aiInstance = await getAI();
   const model = "gemini-3-flash-preview";
   
   const dateRangeContext = startDate && endDate 
@@ -41,11 +57,11 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
   5. Format : Nom exact du jeu, date (JJ/MM/AAAA), numéros gagnants, URL source.`;
 
   try {
-    if (!ai) {
+    if (!aiInstance) {
       console.warn("Gemini API key is missing. Skipping fetch.");
       return [];
     }
-    const response = await ai.models.generateContent({
+    const response = await aiInstance.models.generateContent({
       model: model,
       contents: prompt,
       config: {
@@ -90,12 +106,13 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
 }
 
 export async function chatWithGemini(message: string, history: { role: "user" | "model", parts: { text: string }[] }[]) {
-  if (!ai) {
+  const aiInstance = await getAI();
+  if (!aiInstance) {
     return { text: "Le service d'IA est actuellement indisponible car la clé API n'est pas configurée. Veuillez ajouter VITE_GEMINI_API_KEY dans vos variables d'environnement." };
   }
   const model = "gemini-3.1-pro-preview";
   
-  const chat = ai.chats.create({
+  const chat = aiInstance.chats.create({
     model: model,
     config: {
       systemInstruction: "Tu es un expert en résultats de loterie Lonato et mondiaux. Aide les utilisateurs à trouver des résultats, comprendre les jeux et donne des informations basées sur les données réelles. Sois précis et professionnel.",
