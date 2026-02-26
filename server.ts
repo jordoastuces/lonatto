@@ -87,7 +87,10 @@ async function startServer() {
         contents: history.map((h: any) => ({
           role: h.role === "user" ? "user" : "model",
           parts: [{ text: h.parts[0].text }]
-        })).concat([{ role: "user", parts: [{ text: message }] }])
+        })).concat([{ role: "user", parts: [{ text: message }] }]),
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
       });
 
       const response = await model;
@@ -135,7 +138,8 @@ async function startServer() {
         model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
-          systemInstruction: "Tu es un extracteur de données de loterie. Ne génère que du JSON valide. Cite tes sources (URL).",
+          systemInstruction: "Tu es un extracteur de données de loterie. Utilise obligatoirement Google Search pour trouver les résultats réels et officiels. Ne génère que du JSON valide. Cite tes sources (URL).",
+          tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,

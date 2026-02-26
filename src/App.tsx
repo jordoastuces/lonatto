@@ -164,8 +164,10 @@ export default function App() {
       setLastUpdated(new Date().toLocaleTimeString());
       if (data && data.length > 0) {
         localStorage.setItem(cacheKey, JSON.stringify(data));
-      } else if (!isCustomRange) {
-        setError("Aucun résultat récent trouvé pour ce pays.");
+      } else {
+        // If no results, we don't set a hard error, just an empty list
+        // The UI will show the "Aucune donnée" block instead of the red error block
+        setResults([]);
       }
     } catch (error: any) {
       console.error(error);
@@ -605,15 +607,27 @@ export default function App() {
                   <Search className="w-6 h-6 text-slate-300" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-slate-900 font-bold uppercase tracking-widest">Aucune donnée</p>
-                  <p className="text-xs text-slate-400">Les archives pour ce pays sont actuellement vides.</p>
+                  <p className="text-slate-900 font-bold uppercase tracking-widest">Aucune donnée trouvée</p>
+                  <p className="text-xs text-slate-400">
+                    {startDate || endDate 
+                      ? "L'IA n'a pas trouvé de tirages officiels pour cette période précise." 
+                      : "Les archives pour ce pays sont actuellement vides ou en cours de mise à jour."}
+                  </p>
                 </div>
-                <button 
-                  onClick={() => loadResults(selectedCountry, true, startDate, endDate, selectedGame)}
-                  className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all"
-                >
-                  Forcer la recherche
-                </button>
+                <div className="flex flex-col gap-3 pt-2">
+                  <button 
+                    onClick={() => loadResults(selectedCountry, true, startDate, endDate, selectedGame)}
+                    className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all"
+                  >
+                    Réessayer la recherche
+                  </button>
+                  <button 
+                    onClick={() => setIsChatOpen(true)}
+                    className="text-[10px] text-brand-blue font-bold uppercase tracking-widest hover:underline"
+                  >
+                    Demander à l'IA via le Chat
+                  </button>
+                </div>
               </div>
             )}
           </div>
