@@ -125,6 +125,30 @@ export default function App() {
     };
     checkStatus();
 
+    // Pre-cache previous month data for offline use
+    const precachePreviousMonth = async () => {
+      const now = new Date();
+      const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      
+      const start = firstDayPrevMonth.toISOString().split('T')[0];
+      const end = lastDayPrevMonth.toISOString().split('T')[0];
+      
+      const cacheKey = `lottery_v2026_v1_${selectedCountry}_${start}_${end}_all`;
+      if (!localStorage.getItem(cacheKey)) {
+        console.log("Pre-caching previous month data...");
+        try {
+          const data = await fetchLotteryResults(selectedCountry, start, end);
+          if (data && data.length > 0) {
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+          }
+        } catch (e) {
+          console.error("Pre-cache failed", e);
+        }
+      }
+    };
+    precachePreviousMonth();
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration().then(reg => {
         reg?.pushManager.getSubscription().then(sub => {
@@ -135,11 +159,22 @@ export default function App() {
   }, []);
 
   const loadResults = async (country: string, forceRefresh = false, start?: string, end?: string, game?: string) => {
+    // If no dates provided, default to last 14 days to ensure we see "all daily results"
+    let effectiveStart = start;
+    let effectiveEnd = end;
+    
+    if (!start && !end) {
+      const now = new Date();
+      const fourteenDaysAgo = new Date(now.getTime() - (14 * 24 * 60 * 60 * 1000));
+      effectiveStart = fourteenDaysAgo.toISOString().split('T')[0];
+      effectiveEnd = now.toISOString().split('T')[0];
+    }
+
     const isCustomRange = start && end;
     const CACHE_VERSION = 'v2026_v1';
     const cacheKey = isCustomRange 
       ? `lottery_${CACHE_VERSION}_${country}_${start}_${end}_${game || 'all'}`
-      : `lottery_${CACHE_VERSION}_${country}_latest`;
+      : `lottery_${CACHE_VERSION}_${country}_latest_14d`;
     
     if (!forceRefresh) {
       const cachedData = localStorage.getItem(cacheKey);
@@ -160,7 +195,7 @@ export default function App() {
     setError(null);
     setIsFromCache(false);
     try {
-      const data = await fetchLotteryResults(country, start, end, game);
+      const data = await fetchLotteryResults(country, effectiveStart, effectiveEnd, game);
       setResults(data);
       setLastUpdated(new Date().toLocaleTimeString());
       if (data && data.length > 0) {
@@ -179,26 +214,39 @@ export default function App() {
   };
 
   const sortedResults = [...results].sort((a, b) => {
-    // Robust date parsing for JJ/MM/AAAA or standard formats
+    // Robust date parsing for various formats
     const parseDate = (dateStr: string) => {
+      if (!dateStr) return 0;
+      
+      // Try to handle JJ/MM/AAAA or JJ-MM-AAAA
       const parts = dateStr.split(/[\/\-]/);
       if (parts.length === 3) {
-        // Assume JJ/MM/AAAA
+        // Case: JJ/MM/AAAA or JJ-MM-AAAA (common in Togo/France)
         if (parts[2].length === 4) {
-          return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+          const day = parseInt(parts[0]);
+          const month = parseInt(parts[1]) - 1;
+          const year = parseInt(parts[2]);
+          return new Date(year, month, day).getTime();
         }
-        // Assume AAAA/MM/JJ
+        // Case: AAAA/MM/JJ or AAAA-MM-JJ (standard ISO-like)
         if (parts[0].length === 4) {
-          return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
+          const year = parseInt(parts[0]);
+          const month = parseInt(parts[1]) - 1;
+          const day = parseInt(parts[2]);
+          return new Date(year, month, day).getTime();
         }
       }
-      return new Date(dateStr).getTime();
+      
+      // Fallback to standard Date constructor
+      const timestamp = new Date(dateStr).getTime();
+      return isNaN(timestamp) ? 0 : timestamp;
     };
 
     const dateA = parseDate(a.date);
     const dateB = parseDate(b.date);
     
-    if (isNaN(dateA) || isNaN(dateB)) {
+    if (dateA === 0 || dateB === 0) {
+      // If one date is invalid, use localeCompare as fallback
       return sortOrder === 'desc' 
         ? b.date.localeCompare(a.date) 
         : a.date.localeCompare(b.date);
@@ -211,6 +259,30 @@ export default function App() {
     if (selectedGame === 'All') return sortedResults;
     return sortedResults.filter(r => r.gameName.toLowerCase().includes(selectedGame.toLowerCase()));
   }, [sortedResults, selectedGame]);
+
+  const groupedResults = useMemo(() => {
+    const groups: { [key: string]: LotteryResult[] } = {};
+    filteredResults.forEach(result => {
+      if (!groups[result.date]) {
+        groups[result.date] = [];
+      }
+      groups[result.date].push(result);
+    });
+    return Object.entries(groups).sort((a, b) => {
+      // Sort groups by date based on sortOrder
+      const parseDate = (dateStr: string) => {
+        const parts = dateStr.split(/[\/\-]/);
+        if (parts.length === 3) {
+          if (parts[2].length === 4) return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+          if (parts[0].length === 4) return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
+        }
+        return new Date(dateStr).getTime();
+      };
+      const dateA = parseDate(a[0]);
+      const dateB = parseDate(b[0]);
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+  }, [filteredResults, sortOrder]);
 
   const availableGames = useMemo(() => {
     const games = Array.from(new Set(results.map(r => r.gameName))).sort();
@@ -272,7 +344,7 @@ export default function App() {
     setIsChatLoading(true);
 
     try {
-      const response = await chatWithGemini(userMessage, newHistory);
+      const response = await chatWithGemini(userMessage, newHistory, results);
       setChatHistory([...newHistory, { role: "model" as const, parts: [{ text: response.text || "Désolé, je n'ai pas pu répondre." }] }]);
     } catch (error) {
       console.error(error);
@@ -295,8 +367,16 @@ export default function App() {
             className="relative"
           >
             <div className="absolute -inset-4 bg-gradient-to-r from-brand-red via-brand-green to-brand-blue rounded-full blur-2xl opacity-20 animate-pulse"></div>
-            <div className="relative bg-white p-6 rounded-[3rem] shadow-2xl border border-slate-50">
-              <Trophy className="w-20 h-20 text-brand-gold" />
+            <div className="relative bg-white p-2 rounded-[3rem] shadow-2xl border border-slate-50 overflow-hidden">
+              <img 
+                src="/logo.png" 
+                alt="Lonato World Pro Logo" 
+                className="w-32 h-32 object-contain"
+                onError={(e) => {
+                  // Fallback if image is missing
+                  e.currentTarget.src = "https://picsum.photos/seed/lonato/200/200";
+                }}
+              />
             </div>
           </motion.div>
 
@@ -355,8 +435,8 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-brand-red via-brand-green to-brand-blue rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-              <div className="relative bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm">
-                <Trophy className="text-brand-gold w-6 h-6" />
+              <div className="relative bg-white p-1 rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
               </div>
             </div>
             <div className="flex flex-col">
@@ -602,89 +682,100 @@ export default function App() {
                   Réessayer la connexion
                 </button>
               </div>
-            ) : filteredResults.length > 0 ? (
-              <div className="grid gap-6">
-                {filteredResults.map((result, idx) => (
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.05 }}
-                    key={`${result.gameName}-${result.date}`}
-                    className="group bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-slate-200 transition-all duration-500 relative overflow-hidden"
-                  >
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            ) : groupedResults.length > 0 ? (
+              <div className="space-y-12">
+                {groupedResults.map(([date, dateResults], gIdx) => (
+                  <div key={date} className="space-y-6">
+                    <div className="flex items-center gap-4">
+                      <div className="h-px flex-1 bg-slate-200" />
+                      <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full border border-slate-200">
+                        <Calendar className="w-3 h-3 text-slate-500" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">{date}</span>
+                      </div>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
                     
-                    <div className="flex justify-between items-start mb-8 relative z-10">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="px-2 py-0.5 bg-brand-red/10 text-brand-red text-[8px] font-black uppercase tracking-[0.2em] rounded-md">
-                            {result.gameName.includes('Sam') ? 'Premium' : 'Standard'}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">#{idx + 1}</span>
-                        </div>
-                        <h3 className="font-serif italic text-3xl text-slate-900 leading-none mb-2">{result.gameName}</h3>
-                        <div className="flex items-center gap-2 text-slate-400">
-                          <Calendar className="w-3 h-3" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">{result.date}</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-1">{result.country}</div>
-                        <div className="w-8 h-1 bg-brand-blue ml-auto rounded-full mb-2" />
-                        {result.sourceUrl && (
-                          <a 
-                            href={result.sourceUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-[8px] font-bold text-brand-blue uppercase tracking-widest hover:underline flex items-center justify-end gap-1"
-                          >
-                            Source <Globe className="w-2 h-2" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-8 relative z-10">
-                      <div>
-                        <div className="section-header mb-3">
-                          <Hash className="w-3 h-3" />
-                          Séquence Gagnante
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                          {result.winningNumbers.map((num, i) => {
-                            const colors = ['bg-brand-red', 'bg-brand-green', 'bg-brand-blue'];
-                            const colorClass = colors[i % colors.length];
-                            return (
-                              <motion.div 
-                                key={i} 
-                                whileHover={{ y: -5 }}
-                                className={cn("w-14 h-14 rounded-2xl text-white flex items-center justify-center font-mono text-xl font-bold shadow-xl shadow-slate-200", colorClass)}
-                              >
-                                {num < 10 ? `0${num}` : num}
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {(result.machineNumbers && result.machineNumbers.length > 0) && (
-                        <div>
-                          <div className="section-header mb-3">
-                            <Layers className="w-3 h-3" />
-                            Numéros Machine
-                          </div>
-                          <div className="flex flex-wrap gap-3">
-                            {result.machineNumbers.map((num, i) => (
-                              <div key={i} className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 flex items-center justify-center font-mono text-lg font-bold">
-                                {num < 10 ? `0${num}` : num}
+                    <div className="grid gap-6">
+                      {dateResults.map((result, idx) => (
+                        <motion.div
+                          initial={{ opacity: 0, y: 30 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: idx * 0.05 }}
+                          key={`${result.gameName}-${result.date}`}
+                          className="group bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-slate-200 transition-all duration-500 relative overflow-hidden"
+                        >
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                          
+                          <div className="flex justify-between items-start mb-8 relative z-10">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="px-2 py-0.5 bg-brand-red/10 text-brand-red text-[8px] font-black uppercase tracking-[0.2em] rounded-md">
+                                  {result.gameName.includes('Sam') ? 'Premium' : 'Standard'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">#{idx + 1}</span>
                               </div>
-                            ))}
+                              <h3 className="font-serif italic text-3xl text-slate-900 leading-none mb-2">{result.gameName}</h3>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-1">{result.country}</div>
+                              <div className="w-8 h-1 bg-brand-blue ml-auto rounded-full mb-2" />
+                              {result.sourceUrl && (
+                                <a 
+                                  href={result.sourceUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-[8px] font-bold text-brand-blue uppercase tracking-widest hover:underline flex items-center justify-end gap-1"
+                                >
+                                  Source <Globe className="w-2 h-2" />
+                                </a>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+
+                          <div className="space-y-8 relative z-10">
+                            <div>
+                              <div className="section-header mb-3">
+                                <Hash className="w-3 h-3" />
+                                Séquence Gagnante
+                              </div>
+                              <div className="flex flex-wrap gap-3">
+                                {result.winningNumbers.map((num, i) => {
+                                  const colors = ['bg-brand-red', 'bg-brand-green', 'bg-brand-blue'];
+                                  const colorClass = colors[i % colors.length];
+                                  return (
+                                    <motion.div 
+                                      key={i} 
+                                      whileHover={{ y: -5 }}
+                                      className={cn("w-14 h-14 rounded-2xl text-white flex items-center justify-center font-mono text-xl font-bold shadow-xl shadow-slate-200", colorClass)}
+                                    >
+                                      {num < 10 ? `0${num}` : num}
+                                    </motion.div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {(result.machineNumbers && result.machineNumbers.length > 0) && (
+                              <div>
+                                <div className="section-header mb-3">
+                                  <Layers className="w-3 h-3" />
+                                  Numéros Machine
+                                </div>
+                                <div className="flex flex-wrap gap-3">
+                                  {result.machineNumbers.map((num, i) => (
+                                    <div key={i} className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 flex items-center justify-center font-mono text-lg font-bold">
+                                      {num < 10 ? `0${num}` : num}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -839,7 +930,7 @@ export default function App() {
         <footer className="pt-10 pb-20 border-t border-slate-200 space-y-8">
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-brand-gold" />
+              <img src="/logo.png" alt="Logo" className="w-6 h-6 object-contain" />
               <span className="font-serif italic text-xl">Lonato World Pro</span>
             </div>
             <p className="text-[10px] text-slate-400 font-medium max-w-xs">
@@ -916,7 +1007,7 @@ export default function App() {
                   <div className="space-y-3">
                     <h4 className="text-slate-900 font-serif italic text-2xl">Comment puis-je vous aider ?</h4>
                     <p className="text-slate-400 text-xs font-medium px-12 leading-relaxed">
-                      Je suis programmé pour analyser les tirages Lonato et mondiaux. Posez-moi vos questions sur les tendances ou les résultats spécifiques.
+                      Je suis l'Expert Lonato IA. Je peux analyser les tirages affichés, calculer des probabilités ou répondre à vos questions sur les résultats de loterie présents sur l'application.
                     </p>
                   </div>
                   <div className="flex flex-wrap justify-center gap-3 px-6">
