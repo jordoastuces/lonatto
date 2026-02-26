@@ -67,9 +67,90 @@ async function startServer() {
     const key = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
     res.json({ 
       hasApiKey: !!key,
-      apiKey: key,
       source: process.env.VITE_GEMINI_API_KEY ? "VITE_PREFIX" : (process.env.GEMINI_API_KEY ? "DIRECT" : "NONE")
     });
+  });
+
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const { message, history } = req.body;
+      const key = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+      if (!key) {
+        return res.status(500).json({ error: "Clé API non configurée sur le serveur Render." });
+      }
+
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey: key });
+      const model = ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: history.map((h: any) => ({
+          role: h.role === "user" ? "user" : "model",
+          parts: [{ text: h.parts[0].text }]
+        })).concat([{ role: "user", parts: [{ text: message }] }])
+      });
+
+      const response = await model;
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.error("Chat API Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/lottery", async (req, res) => {
+    try {
+      const { country, startDate, endDate } = req.body;
+      const key = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+      if (!key) {
+        return res.status(500).json({ error: "Clé API non configurée sur le serveur." });
+      }
+
+      const { GoogleGenAI, Type } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey: key });
+      
+      const dateRangeContext = startDate && endDate 
+        ? `entre le ${startDate} et le ${endDate}` 
+        : "les plus récents (derniers tirages)";
+
+      const prompt = `RECHERCHE ET EXTRACTION DES RÉSULTATS OFFICIELS (ANNÉE 2026) :
+      Trouve les résultats réels, officiels et vérifiables de TOUS les tirages de loterie pour le pays : ${country || "Togo"}.
+      Période demandée : ${dateRangeContext}. 
+      IMPORTANT : Nous sommes actuellement en FÉVRIER 2026. Je veux absolument les résultats les plus récents de l'année 2026.
+      
+      JEUX REQUIS : Lotto Sam, Diamond, Benz, Kadoo, Akwaaba, etc.
+      
+      Format : JSON ARRAY d'objets avec country, gameName, date, winningNumbers, sourceUrl.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction: "Tu es un extracteur de données de loterie. Ne génère que du JSON valide. Cite tes sources (URL).",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                country: { type: Type.STRING },
+                gameName: { type: Type.STRING },
+                date: { type: Type.STRING },
+                winningNumbers: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+                sourceUrl: { type: Type.STRING }
+              },
+              required: ["country", "gameName", "date", "winningNumbers", "sourceUrl"]
+            }
+          }
+        }
+      });
+
+      res.json(JSON.parse(response.text));
+    } catch (error: any) {
+      console.error("Lottery API Error:", error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get("/api/vapid-public-key", (req, res) => {
