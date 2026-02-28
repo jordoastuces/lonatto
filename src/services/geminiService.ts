@@ -50,7 +50,7 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
     Format attendu : Un tableau JSON d'objets.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview", // Utilisation de Flash pour la recherche (plus de quota)
       contents: prompt,
       config: {
         systemInstruction: "Tu es un agent spécialisé dans l'extraction de résultats de loterie. Tu DOIS utiliser Google Search pour obtenir des données en temps réel. Renvoie UNIQUEMENT un tableau JSON valide. Ne réponds pas par du texte, seulement le JSON.",
@@ -106,6 +106,9 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
     }
   } catch (error: any) {
     console.error("Error fetching lottery results:", error);
+    if (error.message?.toLowerCase().includes("429") || error.message?.toLowerCase().includes("quota")) {
+      throw new Error("Quota API Gemini dépassé (Limite de requêtes). Veuillez patienter 60 secondes.");
+    }
     throw error;
   }
 }
@@ -118,7 +121,7 @@ export async function chatWithGemini(message: string, history: { role: "user" | 
       : "Aucune donnée n'est actuellement affichée sur l'application.";
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3-flash-preview", // Flash est plus réactif pour le chat
       contents: history.map((h: any) => ({
         role: h.role === "user" ? "user" : "model",
         parts: [{ text: h.parts[0].text }]
@@ -142,6 +145,10 @@ export async function chatWithGemini(message: string, history: { role: "user" | 
     return { text: response.text };
   } catch (error: any) {
     console.error("Chat Error:", error);
+    const isQuotaError = error.message?.toLowerCase().includes("429") || error.message?.toLowerCase().includes("quota");
+    if (isQuotaError) {
+      return { text: "⚠️ **Quota API dépassé** : Je reçois trop de demandes en ce moment. Veuillez patienter environ 60 secondes avant de me reposer votre question." };
+    }
     return { text: `⚠️ **Erreur** : ${error.message}\n\nLa clé API semble invalide ou mal configurée.` };
   }
 }
