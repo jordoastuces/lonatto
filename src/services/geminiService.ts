@@ -20,99 +20,110 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// Fonction utilitaire pour attendre (sleep)
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function fetchLotteryResults(country: string = "Togo", startDate?: string, endDate?: string, gameName?: string): Promise<LotteryResult[]> {
-  try {
-    const ai = getAI();
-    const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const currentYear = new Date().getFullYear();
+  let retries = 0;
+  const maxRetries = 3;
 
-    const dateRangeContext = startDate && endDate 
-      ? `entre le ${startDate} et le ${endDate}` 
-      : "les plus récents (derniers tirages)";
+  while (retries < maxRetries) {
+    try {
+      const ai = getAI();
+      const today = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const currentYear = new Date().getFullYear();
 
-    const gameContext = gameName && gameName !== 'All' 
-      ? `spécifiquement pour le jeu "${gameName}"` 
-      : "pour tous les jeux disponibles (Lotto Sam, Diamond, Benz, Kadoo, Akwaaba, etc.)";
+      const dateRangeContext = startDate && endDate 
+        ? `entre le ${startDate} et le ${endDate}` 
+        : "les plus récents (derniers tirages)";
 
-    const prompt = `RECHERCHE EXHAUSTIVE DE RÉSULTATS DE LOTERIE OFFICIELS :
-    Nous sommes le ${today}.
-    Pays cible : ${country}.
-    Période : ${dateRangeContext}.
-    Jeu : ${gameContext}.
-    
-    INSTRUCTIONS CRITIQUES POUR UNE COUVERTURE TOTALE :
-    1. Tu DOIS trouver les résultats pour CHAQUE JOUR de la période demandée où un tirage a eu lieu.
-    2. Pour le Togo (LONATO), vérifie spécifiquement : DIAMANT (Lundi), BENZ (Mardi), KADOO (Mercredi), SAM (Jeudi), AKWAABA (Vendredi).
-    3. Ne te limite pas aux 5 derniers. Si la période couvre 10 jours, je veux les 10 jours de résultats.
-    4. Utilise Google Search pour consulter les "résultats loto ${country} ${currentYear}" sur des sites comme lonato.tg, loto-togo.com, ou les pages de résultats officiels.
-    5. Pour chaque tirage, fournis : Nom du jeu, Date exacte, les 5 numéros gagnants (Winning Numbers) et les 5 numéros machine (Machine Numbers).
-    6. Si tu ne trouves pas de résultats pour un jour spécifique, continue de chercher pour les jours précédents jusqu'à avoir une liste chronologique complète sans "trous" inexpliqués.
-    7. Assure-toi que les dates sont au format JJ/MM/AAAA.
-    
-    Format attendu : Un tableau JSON d'objets.`;
+      const gameContext = gameName && gameName !== 'All' 
+        ? `spécifiquement pour le jeu "${gameName}"` 
+        : "pour tous les jeux disponibles (Lotto Sam, Diamond, Benz, Kadoo, Akwaaba, etc.)";
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", // Utilisation de Flash pour la recherche (plus de quota)
-      contents: prompt,
-      config: {
-        systemInstruction: "Tu es un agent spécialisé dans l'extraction de résultats de loterie. Tu DOIS utiliser Google Search pour obtenir des données en temps réel. Renvoie UNIQUEMENT un tableau JSON valide. Ne réponds pas par du texte, seulement le JSON.",
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              country: { type: Type.STRING },
-              gameName: { type: Type.STRING },
-              date: { type: Type.STRING },
-              winningNumbers: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-              machineNumbers: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-              sourceUrl: { type: Type.STRING }
-            },
-            required: ["country", "gameName", "date", "winningNumbers"]
+      const prompt = `RECHERCHE EXHAUSTIVE DE RÉSULTATS DE LOTERIE OFFICIELS :
+      Nous sommes le ${today}.
+      Pays cible : ${country}.
+      Période : ${dateRangeContext}.
+      Jeu : ${gameContext}.
+      
+      INSTRUCTIONS CRITIQUES POUR UNE COUVERTURE TOTALE :
+      1. Tu DOIS trouver les résultats pour CHAQUE JOUR de la période demandée où un tirage a eu lieu.
+      2. Pour le Togo (LONATO), vérifie spécifiquement : DIAMANT (Lundi), BENZ (Mardi), KADOO (Mercredi), SAM (Jeudi), AKWAABA (Vendredi).
+      3. Ne te limite pas aux 5 derniers. Si la période couvre 10 jours, je veux les 10 jours de résultats.
+      4. Utilise Google Search pour consulter les "résultats loto ${country} ${currentYear}" sur des sites comme lonato.tg, loto-togo.com, ou les pages de résultats officiels.
+      5. Pour chaque tirage, fournis : Nom du jeu, Date exacte, les 5 numéros gagnants (Winning Numbers) et les 5 numéros machine (Machine Numbers).
+      6. Si tu ne trouves pas de résultats pour un jour spécifique, continue de chercher pour les jours précédents jusqu'à avoir une liste chronologique complète sans "trous" inexpliqués.
+      7. Assure-toi que les dates sont au format JJ/MM/AAAA.
+      
+      Format attendu : Un tableau JSON d'objets.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: {
+          systemInstruction: "Tu es un agent spécialisé dans l'extraction de résultats de loterie. Tu DOIS utiliser Google Search pour obtenir des données en temps réel. Renvoie UNIQUEMENT un tableau JSON valide. Ne réponds pas par du texte, seulement le JSON.",
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                country: { type: Type.STRING },
+                gameName: { type: Type.STRING },
+                date: { type: Type.STRING },
+                winningNumbers: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+                machineNumbers: { type: Type.ARRAY, items: { type: Type.INTEGER } },
+                sourceUrl: { type: Type.STRING }
+              },
+              required: ["country", "gameName", "date", "winningNumbers"]
+            }
           }
         }
-      }
-    });
+      });
 
-    const text = response.text;
-    if (!text || text.trim() === "") {
-      console.warn("L'IA a renvoyé une réponse vide.");
-      return [];
-    }
-    
-    let cleanText = text.trim();
-    
-    // Nettoyage plus robuste des blocs de code Markdown si présents
-    if (cleanText.includes("```")) {
-      const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch && jsonMatch[1]) {
-        cleanText = jsonMatch[1].trim();
-      } else {
-        // Fallback: essayer de supprimer les balises manuellement si le regex échoue
-        cleanText = cleanText.replace(/^```(?:json)?/, "").replace(/```$/, "").trim();
+      const text = response.text;
+      if (!text || text.trim() === "") {
+        return [];
       }
-    }
-    
-    if (cleanText === "") {
-      return [];
-    }
+      
+      let cleanText = text.trim();
+      if (cleanText.includes("```")) {
+        const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          cleanText = jsonMatch[1].trim();
+        } else {
+          cleanText = cleanText.replace(/^```(?:json)?/, "").replace(/```$/, "").trim();
+        }
+      }
+      
+      if (cleanText === "") return [];
 
-    try {
-      return JSON.parse(cleanText);
+      try {
+        return JSON.parse(cleanText);
+      } catch (error: any) {
+        throw new Error(`Format de données invalide : ${error.message}`);
+      }
     } catch (error: any) {
-      console.error("Erreur de parsing JSON. Texte brut :", text);
-      console.error("Texte nettoyé :", cleanText);
-      throw new Error(`Format de données invalide : ${error.message}`);
+      const isQuotaError = error.message?.toLowerCase().includes("429") || error.message?.toLowerCase().includes("quota");
+      
+      if (isQuotaError && retries < maxRetries - 1) {
+        retries++;
+        const waitTime = 5000 * retries; // Attend 5s, puis 10s
+        console.warn(`Quota atteint. Tentative ${retries}/${maxRetries} après ${waitTime}ms...`);
+        await sleep(waitTime);
+        continue;
+      }
+
+      console.error("Error fetching lottery results:", error);
+      if (isQuotaError) {
+        throw new Error("Le service de recherche Google est saturé. Veuillez patienter 30 à 60 secondes avant de réessayer.");
+      }
+      throw error;
     }
-  } catch (error: any) {
-    console.error("Error fetching lottery results:", error);
-    if (error.message?.toLowerCase().includes("429") || error.message?.toLowerCase().includes("quota")) {
-      throw new Error("Quota API Gemini dépassé (Limite de requêtes). Veuillez patienter 60 secondes.");
-    }
-    throw error;
   }
+  return [];
 }
 
 export async function chatWithGemini(message: string, history: { role: "user" | "model", parts: { text: string }[] }[], currentResults: LotteryResult[]) {
