@@ -11,9 +11,11 @@ export interface LotteryResult {
 }
 
 const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // On vérifie plusieurs sources possibles pour la clé API
+  const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  
   if (!apiKey) {
-    throw new Error("Clé API Gemini manquante. Veuillez vérifier la configuration.");
+    throw new Error("Clé API Gemini manquante. Veuillez ajouter GEMINI_API_KEY dans les variables d'environnement de Render.");
   }
   return new GoogleGenAI({ apiKey });
 };

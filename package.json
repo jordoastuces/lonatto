@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "lonato-world-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.4.1",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

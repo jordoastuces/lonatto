@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lonato-live-v2026';
+const CACHE_NAME = 'lonato-live-v2026.1';
 const DATA_CACHE_NAME = 'lonato-data-cache-v1';
 
 const ASSETS = [
