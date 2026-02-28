@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchLotteryResults, chatWithGemini, LotteryResult } from './services/geminiService';
+import { CalendarWidget } from './components/CalendarWidget';
+import { StatsPage } from './components/StatsPage';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import Markdown from 'react-markdown';
@@ -46,7 +48,57 @@ const COUNTRIES = [
   { name: 'USA', code: 'US' },
 ];
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10 text-center space-y-6">
+          <div className="w-20 h-20 bg-red-100 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-red-100">
+            <X className="w-10 h-10 text-brand-red" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="font-serif italic text-3xl text-slate-900">Oups ! Une erreur est survenue</h1>
+            <p className="text-slate-500 text-sm max-w-xs mx-auto">
+              L'application a rencontré un problème inattendu. Veuillez rafraîchir la page.
+            </p>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest shadow-2xl shadow-slate-200"
+          >
+            Rafraîchir
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [results, setResults] = useState<LotteryResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -213,15 +265,18 @@ export default function App() {
     
     if (!forceRefresh) {
       const cachedData = localStorage.getItem(cacheKey);
-      if (cachedData) {
+      if (cachedData && cachedData.trim() !== "") {
         try {
           const parsed = JSON.parse(cachedData);
-          setResults(parsed);
-          setIsFromCache(true);
-          setLoading(false);
-          return;
+          if (Array.isArray(parsed)) {
+            setResults(parsed);
+            setIsFromCache(true);
+            setLoading(false);
+            return;
+          }
         } catch (e) {
           console.error("Cache parse error", e);
+          localStorage.removeItem(cacheKey); // Clear corrupted cache
         }
       }
     }
@@ -231,14 +286,11 @@ export default function App() {
     setIsFromCache(false);
     try {
       const data = await fetchLotteryResults(country, effectiveStart, effectiveEnd, game);
-      setResults(data);
+      const resultsArray = Array.isArray(data) ? data : [];
+      setResults(resultsArray);
       setLastUpdated(new Date().toLocaleTimeString());
-      if (data && data.length > 0) {
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-      } else {
-        // If no results, we don't set a hard error, just an empty list
-        // The UI will show the "Aucune donnée" block instead of the red error block
-        setResults([]);
+      if (resultsArray.length > 0) {
+        localStorage.setItem(cacheKey, JSON.stringify(resultsArray));
       }
     } catch (error: any) {
       console.error(error);
@@ -248,7 +300,7 @@ export default function App() {
     }
   };
 
-  const sortedResults = [...results].sort((a, b) => {
+  const sortedResults = [...(results || [])].sort((a, b) => {
     // Robust date parsing for various formats
     const parseDate = (dateStr: string) => {
       if (!dateStr) return 0;
@@ -320,7 +372,7 @@ export default function App() {
   }, [filteredResults, sortOrder]);
 
   const availableGames = useMemo(() => {
-    const games = Array.from(new Set(results.map(r => r.gameName))).sort();
+    const games = Array.from(new Set((results || []).map(r => r.gameName))).sort();
     const list = ['All', ...games];
     // Ensure Lotto Sam is visible if it's a common request
     if (!list.some(g => g.toLowerCase().includes('sam'))) {
@@ -333,7 +385,8 @@ export default function App() {
     const frequency: Record<number, number> = {};
     const pairs: Record<string, number> = {};
 
-    results.forEach(res => {
+    (results || []).forEach(res => {
+      if (!res.winningNumbers || !Array.isArray(res.winningNumbers)) return;
       const nums = res.winningNumbers;
       nums.forEach(n => {
         frequency[n] = (frequency[n] || 0) + 1;
@@ -397,20 +450,16 @@ export default function App() {
       <div className="min-h-screen bg-white flex flex-col max-w-2xl mx-auto shadow-2xl border-x border-slate-100">
         <main className="flex-1 flex flex-col items-center justify-center p-10 text-center space-y-10">
           <motion.div 
-            initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className="relative"
           >
             <div className="absolute -inset-4 bg-gradient-to-r from-brand-red via-brand-green to-brand-blue rounded-full blur-2xl opacity-20 animate-pulse"></div>
             <div className="relative bg-white p-2 rounded-[3rem] shadow-2xl border border-slate-50 overflow-hidden">
               <img 
-                src="/logo.png" 
+                src="https://www.lonato.tg/wp-content/uploads/2021/06/logo-lonato.png" 
                 alt="Lonato World Pro Logo" 
                 className="w-32 h-32 object-contain"
-                onError={(e) => {
-                  // Fallback if image is missing
-                  e.currentTarget.src = "https://www.lonato.tg/wp-content/uploads/2021/06/logo-lonato.png";
-                }}
+                referrerPolicy="no-referrer"
               />
             </div>
           </motion.div>
@@ -471,7 +520,12 @@ export default function App() {
             <div className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-brand-red via-brand-green to-brand-blue rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
               <div className="relative bg-white p-1 rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
+                <img 
+                  src="https://www.lonato.tg/wp-content/uploads/2021/06/logo-lonato.png" 
+                  alt="Logo" 
+                  className="w-8 h-8 object-contain" 
+                  referrerPolicy="no-referrer"
+                />
               </div>
             </div>
             <div className="flex flex-col">
@@ -564,12 +618,23 @@ export default function App() {
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
             <div className="section-header">
               <Calendar className="w-3 h-3 text-brand-red" />
-              Filtre Temporel
+              Archives & Calendrier
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-1">Date de début</label>
-                <div className="relative">
+            
+            <div className="space-y-6">
+              <CalendarWidget 
+                results={results} 
+                onDateSelect={(date) => {
+                  setStartDate(date);
+                  setEndDate(date);
+                  loadResults(selectedCountry, true, date, date, selectedGame);
+                }}
+                selectedDate={startDate === endDate ? startDate : undefined}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-1">Début</label>
                   <input 
                     type="date" 
                     value={startDate}
@@ -577,10 +642,8 @@ export default function App() {
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-red outline-none transition-all font-medium"
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-1">Date de fin</label>
-                <div className="relative">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider ml-1">Fin</label>
                   <input 
                     type="date" 
                     value={endDate}
@@ -597,6 +660,7 @@ export default function App() {
                   onClick={() => {
                     setStartDate('');
                     setEndDate('');
+                    loadResults(selectedCountry, true);
                   }}
                   className="text-[10px] text-brand-red font-bold uppercase tracking-widest hover:text-red-700 flex items-center gap-1"
                 >
@@ -610,7 +674,7 @@ export default function App() {
                 className="px-6 py-3 bg-brand-blue text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2"
               >
                 <Search className="w-3 h-3" />
-                Rechercher l'historique
+                Filtrer la période
               </button>
             </div>
           </div>
@@ -733,11 +797,9 @@ export default function App() {
                     <div className="grid gap-6">
                       {dateResults.map((result, idx) => (
                         <motion.div
-                          initial={{ opacity: 0, y: 30 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
+                          animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.05 }}
-                          key={`${result.gameName}-${result.date}`}
+                          key={`${result.gameName}-${result.date}-${idx}`}
                           className="group bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-slate-200 transition-all duration-500 relative overflow-hidden"
                         >
                           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
@@ -844,95 +906,7 @@ export default function App() {
             )}
           </div>
         ) : (
-          <div className="space-y-10">
-            <div className="section-header">
-              <TrendingUp className="w-3 h-3" />
-              Analyse Prédictive & Fréquentielle
-            </div>
-
-            {results.length === 0 ? (
-              <div className="bg-white rounded-[2.5rem] p-12 border-2 border-dashed border-slate-100 text-center">
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Données insuffisantes pour l'analyse</p>
-              </div>
-            ) : (
-              <div className="grid gap-8">
-                {/* Frequency Card */}
-                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-8 opacity-5">
-                    <Hash className="w-24 h-24" />
-                  </div>
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                      <Hash className="w-5 h-5 text-brand-blue" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif italic text-2xl text-slate-900">Fréquence d'Apparition</h3>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Top 10 des numéros les plus tirés</p>
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    {stats.frequency.slice(0, 10).map((item, idx) => {
-                      const maxCount = stats.frequency[0].count;
-                      const percentage = (item.count / maxCount) * 100;
-                      return (
-                        <div key={item.num} className="space-y-2">
-                          <div className="flex justify-between items-end">
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl font-mono font-black text-slate-900">{item.num < 10 ? `0${item.num}` : item.num}</span>
-                              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Rang #{idx + 1}</span>
-                            </div>
-                            <span className="text-xs font-black text-brand-blue">{item.count} <span className="text-[10px] text-slate-400 font-normal">Tirages</span></span>
-                          </div>
-                          <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              whileInView={{ width: `${percentage}%` }}
-                              viewport={{ once: true }}
-                              transition={{ duration: 1, ease: "easeOut" }}
-                              className="h-full bg-brand-green rounded-full shadow-[0_0_10px_rgba(39,174,96,0.3)]"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Common Pairs Card */}
-                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-slate-300">
-                  <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <Layers className="w-24 h-24" />
-                  </div>
-                  <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                      <Layers className="w-5 h-5 text-brand-gold" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif italic text-2xl">Paires Dominantes</h3>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Combinaisons de 2 numéros récurrentes</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {stats.pairs.slice(0, 8).map((item, idx) => (
-                      <div key={item.pair} className="bg-white/5 p-5 rounded-3xl border border-white/10 flex flex-col items-center group hover:bg-white/10 transition-all duration-300">
-                        <div className="flex gap-2 mb-3">
-                          {item.pair.split('-').map(n => (
-                            <span key={n} className="w-10 h-10 rounded-xl bg-white text-slate-900 flex items-center justify-center text-sm font-black font-mono shadow-lg">
-                              {parseInt(n) < 10 ? `0${n}` : n}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="text-center">
-                          <div className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em] mb-1">{item.count} Fois</div>
-                          <div className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Fréquence de Paire</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <StatsPage results={results} />
         )}
 
         {/* AI Hero Section */}
@@ -965,7 +939,12 @@ export default function App() {
         <footer className="pt-10 pb-20 border-t border-slate-200 space-y-8">
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="Logo" className="w-6 h-6 object-contain" />
+              <img 
+                src="https://www.lonato.tg/wp-content/uploads/2021/06/logo-lonato.png" 
+                alt="Logo" 
+                className="w-6 h-6 object-contain" 
+                referrerPolicy="no-referrer"
+              />
               <span className="font-serif italic text-xl">Lonato World Pro</span>
             </div>
             <p className="text-[10px] text-slate-400 font-medium max-w-xs">
@@ -1076,7 +1055,7 @@ export default function App() {
                     )}
                   >
                     <div className="markdown-body prose prose-sm max-w-none prose-slate">
-                      <Markdown>{msg.parts[0].text}</Markdown>
+                      <Markdown>{msg.parts[0].text || ""}</Markdown>
                     </div>
                   </div>
                   <span className="text-[9px] text-slate-300 font-black uppercase tracking-[0.2em] px-2">
@@ -1123,9 +1102,7 @@ export default function App() {
       <AnimatePresence>
         {showInstallPopup && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className="fixed bottom-24 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-white rounded-[2.5rem] p-8 shadow-2xl z-50 border border-slate-100"
           >
             <div className="flex items-start gap-4">

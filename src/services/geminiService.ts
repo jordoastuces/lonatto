@@ -74,14 +74,36 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
       }
     });
 
-    let cleanText = response.text.trim();
-    if (cleanText.startsWith("```json")) {
-      cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
-    } else if (cleanText.startsWith("```")) {
-      cleanText = cleanText.replace(/^```/, "").replace(/```$/, "").trim();
+    const text = response.text;
+    if (!text || text.trim() === "") {
+      console.warn("L'IA a renvoyé une réponse vide.");
+      return [];
     }
     
-    return JSON.parse(cleanText);
+    let cleanText = text.trim();
+    
+    // Nettoyage plus robuste des blocs de code Markdown si présents
+    if (cleanText.includes("```")) {
+      const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        cleanText = jsonMatch[1].trim();
+      } else {
+        // Fallback: essayer de supprimer les balises manuellement si le regex échoue
+        cleanText = cleanText.replace(/^```(?:json)?/, "").replace(/```$/, "").trim();
+      }
+    }
+    
+    if (cleanText === "") {
+      return [];
+    }
+
+    try {
+      return JSON.parse(cleanText);
+    } catch (error: any) {
+      console.error("Erreur de parsing JSON. Texte brut :", text);
+      console.error("Texte nettoyé :", cleanText);
+      throw new Error(`Format de données invalide : ${error.message}`);
+    }
   } catch (error: any) {
     console.error("Error fetching lottery results:", error);
     throw error;

@@ -4,14 +4,14 @@ const DATA_CACHE_NAME = 'lonato-data-cache-v1';
 const ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/logo.png'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      // Use individual add for each asset to avoid failing the whole install if one is missing
+      return Promise.allSettled(ASSETS.map(asset => cache.add(asset)));
     })
   );
   self.skipWaiting();
