@@ -11,11 +11,11 @@ export interface LotteryResult {
 }
 
 const getAI = () => {
-  // On vérifie plusieurs sources possibles pour la clé API
-  const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  // On utilise import.meta.env qui est le standard Vite pour la production
+  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   
-  if (!apiKey) {
-    throw new Error("Clé API Gemini manquante. Veuillez ajouter GEMINI_API_KEY dans les variables d'environnement de Render.");
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("Clé API manquante sur Render. Assurez-vous d'avoir créé la variable VITE_GEMINI_API_KEY dans l'onglet Environment de Render.");
   }
   return new GoogleGenAI({ apiKey });
 };
