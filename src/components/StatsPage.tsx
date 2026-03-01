@@ -190,8 +190,8 @@ export const StatsPage: React.FC<StatsPageProps> = ({ results }) => {
               {analysis.pairs.slice(0, 5).map((item) => (
                 <div key={item.pair} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="flex gap-2">
-                    {item.pair.split('-').map(n => (
-                      <div key={n} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-900">
+                    {item.pair.split('-').map((n, i) => (
+                      <div key={`${n}-${i}`} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-900">
                         {n}
                       </div>
                     ))}
@@ -211,8 +211,8 @@ export const StatsPage: React.FC<StatsPageProps> = ({ results }) => {
               {analysis.triplets.map((item) => (
                 <div key={item.triplet} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="flex gap-2">
-                    {item.triplet.split('-').map(n => (
-                      <div key={n} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-900">
+                    {item.triplet.split('-').map((n, i) => (
+                      <div key={`${n}-${i}`} className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-900">
                         {n}
                       </div>
                     ))}

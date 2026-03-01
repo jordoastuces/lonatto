@@ -11,11 +11,14 @@ export interface LotteryResult {
 }
 
 const getAI = () => {
-  // On utilise import.meta.env qui est le standard Vite pour la production
-  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  // Try multiple sources for the API key
+  const apiKey = 
+    (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+    (window as any).process?.env?.GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY;
   
-  if (!apiKey || apiKey === "undefined") {
-    throw new Error("Clé API manquante sur Render. Assurez-vous d'avoir créé la variable VITE_GEMINI_API_KEY dans l'onglet Environment de Render.");
+  if (!apiKey || apiKey === "undefined" || apiKey === "MY_GEMINI_API_KEY") {
+    throw new Error("Clé API Gemini manquante. Veuillez configurer la variable GEMINI_API_KEY dans les paramètres de l'application.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -59,7 +62,7 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
       Format attendu : Un tableau JSON d'objets.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.1-pro-preview",
         contents: prompt,
         config: {
           systemInstruction: "Tu es un agent spécialisé dans l'extraction de résultats de loterie. Tu DOIS utiliser Google Search pour obtenir des données en temps réel. Renvoie UNIQUEMENT un tableau JSON valide. Ne réponds pas par du texte, seulement le JSON.",
@@ -124,44 +127,4 @@ export async function fetchLotteryResults(country: string = "Togo", startDate?: 
     }
   }
   return [];
-}
-
-export async function chatWithGemini(message: string, history: { role: "user" | "model", parts: { text: string }[] }[], currentResults: LotteryResult[]) {
-  try {
-    const ai = getAI();
-    const resultsContext = currentResults.length > 0 
-      ? `Voici les données actuellement affichées sur l'application :\n${JSON.stringify(currentResults.slice(0, 20), null, 2)}`
-      : "Aucune donnée n'est actuellement affichée sur l'application.";
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", // Flash est plus réactif pour le chat
-      contents: history.map((h: any) => ({
-        role: h.role === "user" ? "user" : "model",
-        parts: [{ text: h.parts[0].text }]
-      })).concat([{ role: "user", parts: [{ text: message }] }]),
-      config: {
-        systemInstruction: `Tu es l'Expert Lonato IA de l'application "Lonato World Pro". 
-        
-        RÈGLES CRITIQUES :
-        1. Tu ne dois parler QUE des résultats de loterie, des statistiques et des fonctionnalités présentes sur cette application.
-        2. Si l'utilisateur te pose une question hors sujet (politique, cuisine, sport général, etc.), réponds poliment que tu es spécialisé uniquement dans l'analyse des résultats Lonato et mondiaux présents sur l'app.
-        3. Utilise les données fournies dans le contexte pour répondre précisément.
-        4. Ne mentionne pas que tu es une IA de Google, présente-toi comme l'Expert Lonato IA.
-        5. Si l'utilisateur demande des prédictions, précise qu'il s'agit de probabilités basées sur l'historique et non de certitudes.
-        
-        CONTEXTE ACTUEL :
-        ${resultsContext}`,
-        tools: [{ googleSearch: {} }]
-      }
-    });
-
-    return { text: response.text };
-  } catch (error: any) {
-    console.error("Chat Error:", error);
-    const isQuotaError = error.message?.toLowerCase().includes("429") || error.message?.toLowerCase().includes("quota");
-    if (isQuotaError) {
-      return { text: "⚠️ **Quota API dépassé** : Je reçois trop de demandes en ce moment. Veuillez patienter environ 60 secondes avant de me reposer votre question." };
-    }
-    return { text: `⚠️ **Erreur** : ${error.message}\n\nLa clé API semble invalide ou mal configurée.` };
-  }
 }

@@ -8,10 +8,7 @@ import {
   Search, 
   RefreshCw, 
   Globe, 
-  MessageSquare, 
   X, 
-  Send, 
-  ChevronRight, 
   History,
   Trophy,
   Calendar,
@@ -26,12 +23,11 @@ import {
   Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { fetchLotteryResults, chatWithGemini, LotteryResult } from './services/geminiService';
+import { fetchLotteryResults, LotteryResult } from './services/geminiService';
 import { CalendarWidget } from './components/CalendarWidget';
 import { StatsPage } from './components/StatsPage';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import Markdown from 'react-markdown';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -110,16 +106,11 @@ function AppContent() {
   const [endDate, setEndDate] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [activeTab, setActiveTab] = useState<'results' | 'stats'>('results');
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "model", parts: { text: string }[] }[]>([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPopup, setShowInstallPopup] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   function urlBase64ToUint8Array(base64String: string) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -414,33 +405,6 @@ function AppContent() {
   useEffect(() => {
     loadResults(selectedCountry, false, startDate, endDate, selectedGame);
   }, [selectedCountry, startDate, endDate, selectedGame]);
-
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatHistory]);
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isChatLoading) return;
-
-    const userMessage = chatInput;
-    setChatInput('');
-    const newHistory = [...chatHistory, { role: "user" as const, parts: [{ text: userMessage }] }];
-    setChatHistory(newHistory);
-    setIsChatLoading(true);
-
-    try {
-      const response = await chatWithGemini(userMessage, newHistory, results);
-      setChatHistory([...newHistory, { role: "model" as const, parts: [{ text: response.text || "Désolé, je n'ai pas pu répondre." }] }]);
-    } catch (error) {
-      console.error(error);
-      setChatHistory([...newHistory, { role: "model" as const, parts: [{ text: "Une erreur est survenue lors de la communication avec l'IA." }] }]);
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
 
   const [showLanding, setShowLanding] = useState(true);
   const [isPremium, setIsPremium] = useState(false);
@@ -842,7 +806,7 @@ function AppContent() {
                                   const colorClass = colors[i % colors.length];
                                   return (
                                     <motion.div 
-                                      key={i} 
+                                      key={`${num}-${i}`} 
                                       whileHover={{ y: -5 }}
                                       className={cn("w-14 h-14 rounded-2xl text-white flex items-center justify-center font-mono text-xl font-bold shadow-xl shadow-slate-200", colorClass)}
                                     >
@@ -861,7 +825,7 @@ function AppContent() {
                                 </div>
                                 <div className="flex flex-wrap gap-3">
                                   {result.machineNumbers.map((num, i) => (
-                                    <div key={i} className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 flex items-center justify-center font-mono text-lg font-bold">
+                                    <div key={`${num}-${i}`} className="w-12 h-12 rounded-2xl bg-white border-2 border-slate-100 text-slate-400 flex items-center justify-center font-mono text-lg font-bold">
                                       {num < 10 ? `0${num}` : num}
                                     </div>
                                   ))}
@@ -895,12 +859,6 @@ function AppContent() {
                   >
                     Réessayer la recherche
                   </button>
-                  <button 
-                    onClick={() => setIsChatOpen(true)}
-                    className="text-[10px] text-brand-blue font-bold uppercase tracking-widest hover:underline"
-                  >
-                    Demander à l'IA via le Chat
-                  </button>
                 </div>
               </div>
             )}
@@ -908,32 +866,6 @@ function AppContent() {
         ) : (
           <StatsPage results={results} />
         )}
-
-        {/* AI Hero Section */}
-        <section className="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-xl shadow-slate-100 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full -mr-32 -mt-32 transition-transform duration-700 group-hover:scale-110" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-200">
-                <TrendingUp className="w-6 h-6 text-brand-gold" />
-              </div>
-              <div>
-                <h2 className="font-serif italic text-3xl text-slate-900">IA Prédictive</h2>
-                <p className="text-[10px] font-black text-brand-blue uppercase tracking-[0.3em]">Module de Probabilité</p>
-              </div>
-            </div>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-xs">
-              Exploitez la puissance de Gemini 3.1 pour analyser les tendances historiques et optimiser vos sélections basées sur les données réelles.
-            </p>
-            <button 
-              onClick={() => setIsChatOpen(true)}
-              className="w-full bg-slate-900 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"
-            >
-              Consulter l'Expert IA
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </section>
 
         {/* Footer Commercial */}
         <footer className="pt-10 pb-20 border-t border-slate-200 space-y-8">
@@ -965,138 +897,6 @@ function AppContent() {
           </div>
         </footer>
       </main>
-
-      {/* Floating Action Button for Chat */}
-      {!isChatOpen && (
-        <motion.button
-          initial={{ scale: 0, rotate: -45 }}
-          animate={{ scale: 1, rotate: 0 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-8 right-8 w-16 h-16 bg-slate-900 text-white rounded-[2rem] shadow-2xl shadow-slate-300 flex items-center justify-center z-40 group"
-        >
-          <MessageSquare className="w-7 h-7 group-hover:scale-110 transition-transform" />
-          <div className="absolute -top-1 -right-1 w-4 h-4 bg-brand-red rounded-full border-2 border-white" />
-        </motion.button>
-      )}
-
-      {/* Chat Interface Overlay */}
-      <AnimatePresence>
-        {isChatOpen && (
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed inset-0 bg-white z-50 flex flex-col max-w-2xl mx-auto shadow-2xl"
-          >
-            <div className="px-8 py-6 border-b flex items-center justify-between bg-slate-900 text-white">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10">
-                  <MessageSquare className="w-6 h-6 text-brand-blue" />
-                </div>
-                <div>
-                  <h3 className="font-serif italic text-xl">Expert Lonato IA</h3>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-brand-green rounded-full animate-pulse" />
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Système Connecté</p>
-                  </div>
-                </div>
-              </div>
-              <button 
-                onClick={() => setIsChatOpen(false)}
-                className="p-3 hover:bg-white/10 rounded-2xl transition-all"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50 no-scrollbar">
-              {chatHistory.length === 0 && (
-                <div className="text-center py-16 space-y-8">
-                  <div className="w-24 h-24 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200 flex items-center justify-center mx-auto border border-slate-100">
-                    <Trophy className="w-10 h-10 text-brand-gold" />
-                  </div>
-                  <div className="space-y-3">
-                    <h4 className="text-slate-900 font-serif italic text-2xl">Comment puis-je vous aider ?</h4>
-                    <p className="text-slate-400 text-xs font-medium px-12 leading-relaxed">
-                      Je suis l'Expert Lonato IA. Je peux analyser les tirages affichés, calculer des probabilités ou répondre à vos questions sur les résultats de loterie présents sur l'application.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap justify-center gap-3 px-6">
-                    {["Derniers résultats Togo", "Numéros fréquents", "Probabilités Sam"].map((hint) => (
-                      <button 
-                        key={hint}
-                        onClick={() => setChatInput(hint)}
-                        className="text-[10px] font-bold uppercase tracking-widest bg-white border border-slate-200 px-5 py-3 rounded-2xl text-slate-600 hover:border-brand-blue hover:text-brand-blue transition-all shadow-sm"
-                      >
-                        {hint}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {chatHistory.map((msg, i) => (
-                <div 
-                  key={i} 
-                  className={cn(
-                    "flex flex-col max-w-[90%] space-y-2",
-                    msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"
-                  )}
-                >
-                  <div 
-                    className={cn(
-                      "p-5 rounded-[2rem] text-sm leading-relaxed shadow-sm",
-                      msg.role === "user" 
-                        ? "bg-slate-900 text-white rounded-tr-none" 
-                        : "bg-white border border-slate-100 text-slate-800 rounded-tl-none"
-                    )}
-                  >
-                    <div className="markdown-body prose prose-sm max-w-none prose-slate">
-                      <Markdown>{msg.parts[0].text || ""}</Markdown>
-                    </div>
-                  </div>
-                  <span className="text-[9px] text-slate-300 font-black uppercase tracking-[0.2em] px-2">
-                    {msg.role === "user" ? "Utilisateur" : "Intelligence Artificielle"}
-                  </span>
-                </div>
-              ))}
-              
-              {isChatLoading && (
-                <div className="flex flex-col mr-auto items-start max-w-[90%]">
-                  <div className="bg-white border border-slate-100 p-6 rounded-[2rem] rounded-tl-none shadow-sm">
-                    <div className="flex gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce [animation-delay:-0.3s]" />
-                      <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce" />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            <form onSubmit={handleSendMessage} className="p-6 border-t bg-white flex gap-3">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Interroger l'expert..."
-                className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-medium focus:ring-2 focus:ring-brand-blue transition-all outline-none"
-              />
-              <button 
-                type="submit"
-                disabled={!chatInput.trim() || isChatLoading}
-                className="bg-slate-900 text-white p-4 rounded-2xl hover:bg-slate-800 disabled:opacity-50 transition-all shadow-xl shadow-slate-200"
-              >
-                <Send className="w-6 h-6" />
-              </button>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* PWA Install Popup */}
       <AnimatePresence>
